@@ -39,11 +39,17 @@ function loadServiceAccount(): ServiceAccount {
     ) as ServiceAccount;
   }
 
+  // Dev-only fallback — never taken on Vercel (B64 is always set there). The
+  // dynamic join() below made Turbopack's static analysis trace the ENTIRE
+  // project into every serverless function that imports this module (every
+  // dynamic route, since they all need Firebase Admin), flagged in the build
+  // log as a cause of deployment/runtime failures once size limits are hit —
+  // turbopackIgnore opts this dev-only path out of that whole-project trace.
   const filePath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
   if (filePath) {
     const resolved = isAbsolute(filePath)
       ? filePath
-      : join(process.cwd(), filePath);
+      : join(/* turbopackIgnore: true */ process.cwd(), filePath);
     return JSON.parse(readFileSync(resolved, "utf8")) as ServiceAccount;
   }
 
