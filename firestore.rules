@@ -1,0 +1,115 @@
+rules_version = '2';
+
+// CampusNews Firestore security rules.
+//
+// These are the AUTHORITATIVE authorization layer (spec §10). Frontend guards
+// are UX only. Rules mirror lib/auth/authorize.ts: authenticated -> ACTIVE
+// status -> role -> society/location/college scope -> ownership.
+//
+// Sensitive writes (creating users, changing roles/status) are performed only
+// by the Admin SDK on the server, which bypasses these rules; we still lock the
+// collection down so no client can forge them.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // The signed-in user's own profile document.
+    function myProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isActive() {
+      return isSignedIn() && myProfile().status == 'ACTIVE';
+    }
+
+    function myRoles() {
+      return myProfile().roleIds;
+    }
+
+    function isSocietyAdmin() {
+      return isActive() && ('society_admin' in myRoles());
+    }
+
+    function sameSociety(resource) {
+      return resource.societyId == myProfile().societyId;
+    }
+
+    match /users/{uid} {
+      // A user may always read their own profile. Society admins may read any
+      // profile within their society.
+      allow get: if isSignedIn() &&
+        (request.auth.uid == uid ||
+         (isSocietyAdmin() && sameSociety(resource.data)));
+
+      allow list: if isSocietyAdmin();
+
+      // Profile creation/role/status/scope changes go through the Admin SDK
+      // only — never directly from a client.
+      allow create, delete: if false;
+
+      // A user may update ONLY their own display name, phone, and profile image.
+      // Role, status, and scope fields are immutable from the client (Admin SDK
+      // performs those changes server-side).
+      allow update: if isSignedIn() &&
+        request.auth.uid == uid &&
+        isActive() &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['displayName', 'phoneNumber', 'profileImage', 'updatedAt']);
+    }
+
+    // Articles: the public may read ONLY published content; everything else
+    // (drafts, submitted, rejected, archived) and every write goes through the
+    // Admin SDK, which bypasses these rules. Client writes are denied so the
+    // editorial workflow can only be driven server-side.
+    match /articles/{articleId} {
+      // Direct client get is allowed only for published items, or to the author
+      // / an active same-society member for their own workflow views.
+      allow get: if resource.data.status == 'PUBLISHED' ||
+        (isSignedIn() && (
+          resource.data.authorUid == request.auth.uid ||
+          (isActive() && sameSociety(resource.data))
+        ));
+
+      // All listing and every write happen via the Admin SDK (server-side),
+      // which bypasses these rules. Client list/write is denied so drafts never
+      // leak and the editorial workflow can only be driven server-side.
+      allow list, create, update, delete: if false;
+    }
+
+    // Reels: same rules as articles — public may read only published ones; all
+    // writes and non-published reads go through the Admin SDK (server-side).
+    match /reels/{reelId} {
+      allow get: if resource.data.status == 'PUBLISHED' ||
+        (isSignedIn() && (
+          resource.data.authorUid == request.auth.uid ||
+          (isActive() && sameSociety(resource.data))
+        ));
+      allow list, create, update, delete: if false;
+    }
+
+    // Org hierarchy (locations / colleges / departments): active society members
+    // may read them (to populate scope dropdowns); all writes go through the
+    // Admin SDK, so client writes are denied.
+    match /locations/{id} {
+      allow read: if isActive() && sameSociety(resource.data);
+      allow write: if false;
+    }
+    match /colleges/{id} {
+      allow read: if isActive() && sameSociety(resource.data);
+      allow write: if false;
+    }
+    match /departments/{id} {
+      allow read: if isActive() && sameSociety(resource.data);
+      allow write: if false;
+    }
+
+    // Default-deny everything not explicitly allowed above.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

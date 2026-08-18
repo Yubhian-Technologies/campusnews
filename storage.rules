@@ -1,0 +1,48 @@
+rules_version = '2';
+
+// CampusNews Storage security rules.
+// Profile images live at /profile-images/{uid}/*. A user may write only their
+// own; anyone signed in may read (images are shown across the admin console).
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    match /profile-images/{uid}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() &&
+        request.auth.uid == uid &&
+        request.resource.size < 5 * 1024 * 1024 &&
+        request.resource.contentType.matches('image/.*');
+    }
+
+    // Reel uploads: a signed-in contributor writes videos/thumbnails under their
+    // own uid. Published playback uses tokenized download URLs, so read stays
+    // limited to signed-in users here.
+    match /reel-uploads/{uid}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() &&
+        request.auth.uid == uid &&
+        request.resource.size < 200 * 1024 * 1024 &&
+        (request.resource.contentType.matches('video/.*') ||
+         request.resource.contentType.matches('image/.*'));
+    }
+
+    // Article/event cover images: a signed-in contributor writes under their
+    // own uid.
+    match /article-uploads/{uid}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() &&
+        request.auth.uid == uid &&
+        request.resource.size < 10 * 1024 * 1024 &&
+        request.resource.contentType.matches('image/.*');
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
