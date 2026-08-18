@@ -54,6 +54,24 @@ function loadServiceAccount(): ServiceAccount {
 
 let cachedApp: App | null = null;
 
+/**
+ * Create the default Firebase app, tolerating a concurrent initializer.
+ * Serverless platforms (Vercel) can dispatch a burst of parallel requests
+ * (e.g. Next.js RSC prefetch firing /api/me + several other routes at once)
+ * into the same cold instance; two of them can both pass the `getApps()`
+ * check above before either finishes, and the second `initializeApp()` call
+ * throws "the default Firebase app already exists" — reuse the winner's app
+ * instead of surfacing that as a 500.
+ */
+function initializeAdminApp(options: Parameters<typeof initializeApp>[0]): App {
+  try {
+    return initializeApp(options);
+  } catch (error) {
+    if (getApps().length) return getApps()[0];
+    throw error;
+  }
+}
+
 function getAdminApp(): App {
   if (cachedApp) return cachedApp;
   if (getApps().length) {
@@ -73,7 +91,7 @@ function getAdminApp(): App {
     !!process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
 
   if (useEmulator && !hasCreds) {
-    cachedApp = initializeApp({
+    cachedApp = initializeAdminApp({
       projectId:
         process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "campusnews-dev",
     });
@@ -81,7 +99,7 @@ function getAdminApp(): App {
   }
 
   const sa = loadServiceAccount();
-  cachedApp = initializeApp({
+  cachedApp = initializeAdminApp({
     credential: cert({
       projectId: sa.project_id,
       clientEmail: sa.client_email,
