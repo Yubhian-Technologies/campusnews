@@ -108,6 +108,14 @@ export function ArticleEditor({
   const [useImageUrl, setUseImageUrl] = useState(false);
   const [imageUrlDraft, setImageUrlDraft] = useState("");
 
+  // Events are admin-tier only (College/Location/Super Admin — same roles as
+  // authorAutoPublishes, enforced again server-side in /api/articles). Keep
+  // it selectable if the article already has it (e.g. an old draft), so
+  // editing doesn't force a category change out from under someone.
+  const categoryOptions = ARTICLE_CATEGORIES.filter(
+    (c) => c !== "EVENTS" || autoPublish || form.category === "EVENTS",
+  );
+
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
   }
@@ -256,7 +264,7 @@ export function ArticleEditor({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {ARTICLE_CATEGORIES.map((c) => (
+            {categoryOptions.map((c) => (
               <SelectItem key={c} value={c}>
                 {CATEGORY_LABELS[c]}
               </SelectItem>

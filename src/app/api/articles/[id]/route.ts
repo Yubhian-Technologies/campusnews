@@ -68,8 +68,16 @@ export async function PATCH(request: Request, ctx: Ctx) {
     );
   }
 
-  // Non-admins cannot move an article outside their own location/college.
+  // Events are admin-tier only — same roles that auto-publish everything else.
   const p = parsed.data;
+  if (p.category === "EVENTS" && !authorAutoPublishes(guard.user.profile)) {
+    return NextResponse.json(
+      { error: "Only College, Location, or Super Admins can post Events." },
+      { status: 403 },
+    );
+  }
+
+  // Non-admins cannot move an article outside their own location/college.
   const isAdmin = guard.user.profile.roleIds.includes("society_admin");
   if (!isAdmin) {
     if (p.locationId && p.locationId !== guard.user.profile.locationId) {

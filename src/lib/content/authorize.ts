@@ -3,7 +3,7 @@
  *
  * The generic authorize() in lib/auth/authorize.ts treats college scope
  * strictly, but editorial oversight is hierarchical:
- *   - Super Admin    → all content in the society
+ *   - Super Admin    → all content in the society (see exception below)
  *   - Location Admin → all content in their location (any/no college); can
  *                      moderate/delete anything there, but does not approve
  *                      Student submissions
@@ -14,7 +14,12 @@
  * Super Admin / Location Admin / College Admin publish their own posts directly
  * (no review). Only Student (and Reporter) submissions go through review —
  * Student specifically requires College Admin approval, single-stage, straight
- * to published (no separate Location Admin step).
+ * to published (no separate Location Admin step). This is a hard requirement:
+ * Super Admin does NOT get a stage-1 approval shortcut for Student content —
+ * a student's college admin is the sole reviewer for their submissions (see
+ * canApproveStage1). Super Admin retains full moderation (edit/reject/archive/
+ * delete) via canReviewArticle, and full review authority over non-Student
+ * (single-stage) content.
  *
  * These helpers express that hierarchy for review/edit decisions and for
  * building a reviewer's review-queue query.
@@ -107,18 +112,23 @@ export function canReview(user: UserProfile): boolean {
 }
 
 /**
- * Stage-1 reviewer: approves a SUBMITTED article. For a two-stage (student)
- * article this is the College Head (matching college) or Admin. For single-stage
- * content any in-scope reviewer qualifies.
+ * Stage-1 reviewer: approves (or rejects) a SUBMITTED article. For single-stage
+ * content, Super Admin or any in-scope reviewer qualifies. For a two-stage
+ * (student) article, ONLY the College Head of that student's own college
+ * qualifies — deliberately no Super Admin shortcut here, even though Super
+ * Admin can review everything else. A student's submission is meant to be
+ * gatekept solely by their college admin, not bypassable by a higher role.
  */
 export function canApproveStage1(
   user: UserProfile,
   article: Pick<Article, "societyId" | "locationId" | "collegeId" | "twoStage">,
 ): boolean {
   if (user.status !== "ACTIVE" || !sameSociety(user, article)) return false;
-  if (user.roleIds.includes("society_admin")) return true;
-  if (!article.twoStage) return canReviewArticle(user, article as Article);
-  // two-stage stage 1 = College Head of the article's college
+  if (!article.twoStage) {
+    if (user.roleIds.includes("society_admin")) return true;
+    return canReviewArticle(user, article as Article);
+  }
+  // two-stage stage 1 = College Head of the article's college, exclusively.
   return (
     user.roleIds.includes("college_head") &&
     article.locationId === user.locationId &&

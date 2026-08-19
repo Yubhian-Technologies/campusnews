@@ -16,6 +16,7 @@ import {
   listReviewQueueForUser,
 } from "@/lib/firebase/articles";
 import { studentDomainError } from "@/lib/firebase/org";
+import { authorAutoPublishes } from "@/lib/content/authorize";
 import { createArticleSchema } from "@/lib/validation/article";
 import type { UserProfile } from "@/lib/types";
 
@@ -74,6 +75,14 @@ export async function POST(request: Request) {
     );
   }
   const input = parsed.data;
+
+  // Events are admin-tier only — same roles that auto-publish everything else.
+  if (input.category === "EVENTS" && !authorAutoPublishes(guard.user.profile)) {
+    return NextResponse.json(
+      { error: "Only College, Location, or Super Admins can post Events." },
+      { status: 403 },
+    );
+  }
 
   const scope = resolveScope(guard.user.profile, {
     locationId: input.locationId,

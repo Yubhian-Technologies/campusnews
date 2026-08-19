@@ -185,7 +185,10 @@ export async function listArticlesByAuthor(
  *   - College Head → SUBMITTED articles in their college (stage 1).
  *   - Location News Head → single-stage SUBMITTED + all PENDING_LOCATION in
  *     their location (stage 2 for student content, plus reporter content).
- *   - Society Admin → everything awaiting review in the society.
+ *   - Society Admin → everything awaiting review EXCEPT Student (two-stage)
+ *     submissions, which only their own college admin may act on — no
+ *     Super Admin shortcut (see canApproveStage1). Legacy PENDING_LOCATION
+ *     records are still shown (that stage-2 fallback does allow Admin).
  */
 export async function listReviewQueueForUser(
   user: UserProfile,
@@ -195,9 +198,11 @@ export async function listReviewQueueForUser(
   let docs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
 
   if (user.roleIds.includes("society_admin")) {
-    docs = (
-      await society.where("status", "in", ["SUBMITTED", "PENDING_LOCATION"]).get()
-    ).docs;
+    const [pendingLocation, submittedSingleStage] = await Promise.all([
+      society.where("status", "==", "PENDING_LOCATION").get(),
+      society.where("status", "==", "SUBMITTED").where("twoStage", "==", false).get(),
+    ]);
+    docs = [...pendingLocation.docs, ...submittedSingleStage.docs];
   } else if (user.roleIds.includes("location_news_head") && user.locationId) {
     const loc = society.where("locationId", "==", user.locationId);
     const [pending, submittedSingle] = await Promise.all([

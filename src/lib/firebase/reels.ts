@@ -118,7 +118,12 @@ export async function listReelsByAuthor(
     .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
 }
 
-/** Role-aware reel review queue (mirrors the article queue + two-stage rules). */
+/**
+ * Role-aware reel review queue (mirrors the article queue + two-stage rules).
+ * Society Admin's queue excludes Student (two-stage) SUBMITTED reels — only
+ * their own college admin may act on those (see canApproveStage1); legacy
+ * PENDING_LOCATION records still show (stage-2 fallback does allow Admin).
+ */
 export async function listReelReviewQueueForUser(
   user: UserProfile,
 ): Promise<ReelRecord[]> {
@@ -127,9 +132,11 @@ export async function listReelReviewQueueForUser(
   let docs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
 
   if (user.roleIds.includes("society_admin")) {
-    docs = (
-      await society.where("status", "in", ["SUBMITTED", "PENDING_LOCATION"]).get()
-    ).docs;
+    const [pendingLocation, submittedSingleStage] = await Promise.all([
+      society.where("status", "==", "PENDING_LOCATION").get(),
+      society.where("status", "==", "SUBMITTED").where("twoStage", "==", false).get(),
+    ]);
+    docs = [...pendingLocation.docs, ...submittedSingleStage.docs];
   } else if (user.roleIds.includes("location_news_head") && user.locationId) {
     const loc = society.where("locationId", "==", user.locationId);
     const [pending, submittedSingle] = await Promise.all([

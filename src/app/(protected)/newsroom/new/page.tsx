@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronRight, PenLine, CalendarDays, Clapperboard } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
+import { authorAutoPublishes } from "@/lib/content/authorize";
 
 export const metadata = { title: "New post · CampusNews" };
 
@@ -11,6 +12,7 @@ const OPTIONS = [
     title: "Blog / News",
     desc: "Write an article for the newsroom.",
     tint: "bg-violet-500/10 text-violet-600 dark:text-violet-300",
+    adminOnly: false,
   },
   {
     href: "/newsroom/new/event",
@@ -18,6 +20,9 @@ const OPTIONS = [
     title: "Event",
     desc: "Announce a campus event.",
     tint: "bg-amber-500/10 text-amber-600 dark:text-amber-300",
+    // Admin-tier only (College/Location/Super Admin) — matches
+    // authorAutoPublishes and the server-side gate on /api/articles.
+    adminOnly: true,
   },
   {
     href: "/newsroom/new/reel",
@@ -25,14 +30,17 @@ const OPTIONS = [
     title: "Reel",
     desc: "Upload a short video.",
     tint: "bg-pink-500/10 text-pink-600 dark:text-pink-300",
+    adminOnly: false,
   },
 ] as const;
 
 export default async function NewPostChooserPage() {
-  await requireRole(
+  const { profile } = await requireRole(
     ["reporter", "student", "college_head", "location_news_head", "society_admin"],
     "/newsroom/new",
   );
+  const canPostEvents = authorAutoPublishes(profile);
+  const options = OPTIONS.filter((opt) => !opt.adminOnly || canPostEvents);
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -44,7 +52,7 @@ export default async function NewPostChooserPage() {
       </div>
 
       <div className="space-y-3">
-        {OPTIONS.map((opt) => (
+        {options.map((opt) => (
           <Link
             key={opt.href}
             href={opt.href}
