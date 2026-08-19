@@ -21,6 +21,7 @@ import {
 import { authorAutoPublishes } from "@/lib/content/authorize";
 import {
   createArticleSchema,
+  MAX_ARTICLE_IMAGES,
   updateArticleSchema,
 } from "@/lib/validation/article";
 import {
@@ -48,7 +49,8 @@ interface FormState {
   summary: string;
   body: string;
   category: ArticleCategory;
-  coverImage: string;
+  /** In display order; the first is used as the cover/preview image. */
+  images: string[];
   locationId: string;
   collegeId: string;
   departmentId: string;
@@ -76,37 +78,80 @@ export function ArticleEditor({
   const editable = article
     ? article.status === "DRAFT" || article.status === "REJECTED" || isAdmin
     : true;
+  // "Submit"/"Publish" is only a valid transition from DRAFT/REJECTED (or a
+  // brand-new article) — matches ACTION_TRANSITIONS.submit.from server-side.
+  // An admin editing an already-submitted/published article is still
+  // `editable` (to fix content) but must not re-trigger that transition —
+  // the API correctly 409s "Cannot submit an article that is PUBLISHED."
+  const canSubmit =
+    !article || article.status === "DRAFT" || article.status === "REJECTED";
 
   const [form, setForm] = useState<FormState>({
     title: article?.title ?? "",
     summary: article?.summary ?? "",
     body: article?.body ?? "",
     category: article?.category ?? initialCategory ?? "CAMPUS",
-    coverImage: article?.coverImage ?? "",
+    // Legacy articles only ever had a single coverImage — show it as a
+    // one-item gallery so editing an old article doesn't lose it.
+    images: article?.images?.length
+      ? article.images
+      : article?.coverImage
+        ? [article.coverImage]
+        : [],
     locationId: article?.locationId ?? profile.locationId ?? "",
     collegeId: article?.collegeId ?? profile.collegeId ?? "",
     departmentId: article?.departmentId ?? profile.departmentId ?? "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [coverUploading, setCoverUploading] = useState(false);
-  const [useCoverUrl, setUseCoverUrl] = useState(false);
+  const [imagesUploading, setImagesUploading] = useState(false);
+  const [useImageUrl, setUseImageUrl] = useState(false);
+  const [imageUrlDraft, setImageUrlDraft] = useState("");
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
-  async function handleCoverFile(file: File | null) {
-    if (!file) return;
-    setCoverUploading(true);
+  async function handleAddImageFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const remaining = MAX_ARTICLE_IMAGES - form.images.length;
+    if (remaining <= 0) {
+      toast.error(`You can add up to ${MAX_ARTICLE_IMAGES} images.`);
+      return;
+    }
+    const selected = Array.from(files);
+    const toUpload = selected.slice(0, remaining);
+    if (selected.length > toUpload.length) {
+      toast.error(
+        `Only added the first ${toUpload.length} — up to ${MAX_ARTICLE_IMAGES} images per article.`,
+      );
+    }
+    setImagesUploading(true);
     try {
-      const url = await uploadUserAsset(file, "article-uploads");
-      set("coverImage", url);
+      const urls = await Promise.all(
+        toUpload.map((file) => uploadUserAsset(file, "article-uploads")),
+      );
+      setForm((f) => ({ ...f, images: [...f.images, ...urls] }));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed.");
     } finally {
-      setCoverUploading(false);
+      setImagesUploading(false);
     }
+  }
+
+  function removeImage(index: number) {
+    setForm((f) => ({ ...f, images: f.images.filter((_, i) => i !== index) }));
+  }
+
+  function addImageUrl() {
+    const url = imageUrlDraft.trim();
+    if (!url) return;
+    if (form.images.length >= MAX_ARTICLE_IMAGES) {
+      toast.error(`You can add up to ${MAX_ARTICLE_IMAGES} images.`);
+      return;
+    }
+    setForm((f) => ({ ...f, images: [...f.images, url] }));
+    setImageUrlDraft("");
   }
 
   /** Validate + persist. Returns the article id on success, else null. */
@@ -117,7 +162,7 @@ export function ArticleEditor({
       summary: form.summary,
       body: form.body,
       category: form.category,
-      coverImage: form.coverImage || null,
+      images: form.images,
       locationId: form.locationId,
       collegeId: form.collegeId || null,
       departmentId: form.departmentId || null,
@@ -202,85 +247,86 @@ export function ArticleEditor({
         />
       </Field>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Category" error={errors.category}>
-          <Select
-            value={form.category}
-            onValueChange={(v) => v && set("category", v as ArticleCategory)}
-          >
-            <SelectTrigger disabled={!editable}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {ARTICLE_CATEGORIES.map((c) => (
-                <SelectItem key={c} value={c}>
-                  {CATEGORY_LABELS[c]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
+      <Field label="Category" error={errors.category}>
+        <Select
+          value={form.category}
+          onValueChange={(v) => v && set("category", v as ArticleCategory)}
+        >
+          <SelectTrigger disabled={!editable}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {ARTICLE_CATEGORIES.map((c) => (
+              <SelectItem key={c} value={c}>
+                {CATEGORY_LABELS[c]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
 
-        <Field label="Cover image (optional)" error={errors.coverImage}>
-          {form.coverImage ? (
-            <div className="space-y-2">
-              <div className="relative h-36 w-full overflow-hidden rounded-lg border bg-muted">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={form.coverImage}
-                  alt=""
-                  className="size-full object-cover"
-                />
-              </div>
-              {editable && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    set("coverImage", "");
-                    setUseCoverUrl(false);
-                  }}
+      <Field
+        label={`Images (optional, up to ${MAX_ARTICLE_IMAGES})`}
+        error={errors.images}
+      >
+        <div className="space-y-2">
+          {form.images.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {form.images.map((url, i) => (
+                <div
+                  key={`${i}-${url}`}
+                  className="relative size-24 shrink-0 overflow-hidden rounded-lg border bg-muted"
                 >
-                  <X className="size-4" />
-                  Remove
-                </Button>
-              )}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt="" className="size-full object-cover" />
+                  {editable && (
+                    <button
+                      type="button"
+                      onClick={() => removeImage(i)}
+                      aria-label="Remove image"
+                      className="absolute right-1 top-1 grid size-5 place-items-center rounded-full bg-black/60 text-white hover:bg-black/80"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
-          ) : useCoverUrl ? (
-            <div className="space-y-1.5">
-              <Input
-                autoFocus
-                value={form.coverImage}
-                disabled={!editable}
-                onChange={(e) => set("coverImage", e.target.value)}
-                placeholder="https://…"
-              />
-              <button
-                type="button"
-                onClick={() => setUseCoverUrl(false)}
-                className="text-xs font-medium text-muted-foreground hover:text-foreground"
-              >
-                Upload a file instead
-              </button>
-            </div>
-          ) : (
+          )}
+
+          {editable && form.images.length < MAX_ARTICLE_IMAGES && (
             <div className="space-y-1.5">
               <Input
                 type="file"
                 accept="image/*"
-                disabled={!editable || coverUploading}
-                onChange={(e) => handleCoverFile(e.target.files?.[0] ?? null)}
+                multiple
+                disabled={imagesUploading}
+                onChange={(e) => {
+                  void handleAddImageFiles(e.target.files);
+                  e.target.value = "";
+                }}
               />
-              {coverUploading ? (
+              {imagesUploading ? (
                 <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Loader2 className="size-3.5 animate-spin" />
                   Uploading…
                 </p>
+              ) : useImageUrl ? (
+                <div className="flex gap-2">
+                  <Input
+                    autoFocus
+                    value={imageUrlDraft}
+                    onChange={(e) => setImageUrlDraft(e.target.value)}
+                    placeholder="https://…"
+                  />
+                  <Button type="button" variant="outline" size="sm" onClick={addImageUrl}>
+                    Add
+                  </Button>
+                </div>
               ) : (
                 <button
                   type="button"
-                  onClick={() => setUseCoverUrl(true)}
+                  onClick={() => setUseImageUrl(true)}
                   className="text-xs font-medium text-muted-foreground hover:text-foreground"
                 >
                   Or paste an image URL
@@ -288,8 +334,8 @@ export function ArticleEditor({
               )}
             </div>
           )}
-        </Field>
-      </div>
+        </div>
+      </Field>
 
       {isAdmin ? (
         <ScopeSelector
@@ -336,18 +382,24 @@ export function ArticleEditor({
 
       {editable && (
         <div className="flex items-center gap-3">
-          <Button type="submit" variant="outline" disabled={saving}>
+          <Button
+            type="submit"
+            variant={canSubmit ? "outline" : "default"}
+            disabled={saving}
+          >
             {saving && <Loader2 className="size-4 animate-spin" />}
-            Save draft
+            {canSubmit ? "Save draft" : "Save changes"}
           </Button>
-          <Button type="button" disabled={saving} onClick={() => onSave(true)}>
-            {autoPublish ? (
-              <Rocket className="size-4" />
-            ) : (
-              <Send className="size-4" />
-            )}
-            {autoPublish ? "Publish" : "Save & submit"}
-          </Button>
+          {canSubmit && (
+            <Button type="button" disabled={saving} onClick={() => onSave(true)}>
+              {autoPublish ? (
+                <Rocket className="size-4" />
+              ) : (
+                <Send className="size-4" />
+              )}
+              {autoPublish ? "Publish" : "Save & submit"}
+            </Button>
+          )}
         </div>
       )}
     </form>

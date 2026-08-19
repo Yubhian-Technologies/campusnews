@@ -11,6 +11,9 @@ const optionalId = z
   .nullish()
   .transform((v) => (v ? v : null));
 
+/** Max images per article — a horizontally-scrollable gallery, not an album. */
+export const MAX_ARTICLE_IMAGES = 8;
+
 const baseArticleFields = {
   title: z.string().trim().min(4, "Title must be at least 4 characters.").max(160),
   summary: z
@@ -20,12 +23,11 @@ const baseArticleFields = {
     .max(320),
   body: z.string().trim().min(20, "The article body is too short."),
   category: z.enum(ARTICLE_CATEGORIES),
-  coverImage: z
-    .string()
-    .trim()
-    .url("Cover image must be a valid URL.")
-    .nullish()
-    .transform((v) => (v ? v : null)),
+  /** In display order; the first is used as the cover/preview image. */
+  images: z
+    .array(z.string().trim().url("Each image must be a valid URL."))
+    .max(MAX_ARTICLE_IMAGES, `You can add up to ${MAX_ARTICLE_IMAGES} images.`)
+    .default([]),
   locationId: z.string().trim().min(1, "A location is required."),
   collegeId: optionalId,
   departmentId: optionalId,
@@ -39,7 +41,7 @@ export const updateArticleSchema = z.object({
   summary: baseArticleFields.summary.optional(),
   body: baseArticleFields.body.optional(),
   category: baseArticleFields.category.optional(),
-  coverImage: baseArticleFields.coverImage.optional(),
+  images: baseArticleFields.images.optional(),
   locationId: baseArticleFields.locationId.optional(),
   collegeId: baseArticleFields.collegeId.optional(),
   departmentId: baseArticleFields.departmentId.optional(),

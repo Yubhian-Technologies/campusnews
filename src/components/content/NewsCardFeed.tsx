@@ -12,7 +12,7 @@ import { ArrowLeft, Clock, GraduationCap } from "lucide-react";
 import type { Article } from "@/lib/content/types";
 import { timeAgo } from "@/lib/content/format";
 import { CategoryChip } from "./CategoryChip";
-import { CoverImage } from "./CoverImage";
+import { ImageGallery } from "./ImageGallery";
 import { ArticleActions } from "./ArticleActions";
 
 export function NewsCardFeed({
@@ -72,10 +72,10 @@ export function NewsCardFeed({
                 activeSlug === article.slug ? "animate-news-flip" : ""
               }`}
             >
-              {/* Top half — cover image */}
+              {/* Top half — image(s) */}
               <div className="relative h-[44%] shrink-0">
-                <CoverImage
-                  src={article.coverImage}
+                <ImageGallery
+                  images={article.images}
                   category={article.category}
                   sizes="(max-width: 640px) 100vw, 448px"
                   className="size-full"

@@ -76,6 +76,8 @@ export interface Article {
   title: string;
   summary: string;
   body: string;
+  /** Every image, in display order; `coverImage` always mirrors images[0]. */
+  images: string[];
   coverImage: string | null;
   category: ArticleCategory;
   status: ArticleStatus;

@@ -25,13 +25,21 @@ function mapArticle(
   id: string,
   data: FirebaseFirestore.DocumentData,
 ): Article {
+  // Legacy articles (pre-gallery) only ever had `coverImage`; fall back to it
+  // as a single-item gallery so old published articles still render.
+  const images: string[] = Array.isArray(data.images)
+    ? data.images
+    : data.coverImage
+      ? [data.coverImage]
+      : [];
   return {
     id,
     slug: data.slug ?? "",
     title: data.title ?? "",
     summary: data.summary ?? "",
     body: data.body ?? "",
-    coverImage: data.coverImage ?? null,
+    images,
+    coverImage: images[0] ?? null,
     category: (data.category ?? "OTHER") as ArticleCategory,
     status: (data.status ?? "DRAFT") as ArticleStatus,
     authorUid: data.authorUid ?? "",
@@ -56,7 +64,8 @@ export interface CreateArticleData {
   summary: string;
   body: string;
   category: ArticleCategory;
-  coverImage: string | null;
+  /** In display order; coverImage is always derived as images[0]. */
+  images: string[];
   authorUid: string;
   authorName: string;
   /** Author is a student → two-stage approval (college head → location head). */
@@ -72,6 +81,7 @@ export async function createArticle(data: CreateArticleData): Promise<string> {
   const ref = adminDb().collection(ARTICLES).doc();
   await ref.set({
     ...data,
+    coverImage: data.images[0] ?? null,
     slug: makeSlug(data.title),
     status: "DRAFT" satisfies ArticleStatus,
     reviewedByUid: null,
@@ -104,7 +114,8 @@ export interface UpdateArticleData {
   summary?: string;
   body?: string;
   category?: ArticleCategory;
-  coverImage?: string | null;
+  /** In display order; coverImage is always derived as images[0]. */
+  images?: string[];
   locationId?: string;
   collegeId?: string | null;
   departmentId?: string | null;
@@ -117,7 +128,11 @@ export async function updateArticle(
   await adminDb()
     .collection(ARTICLES)
     .doc(id)
-    .update({ ...patch, updatedAt: FieldValue.serverTimestamp() });
+    .update({
+      ...patch,
+      ...(patch.images && { coverImage: patch.images[0] ?? null }),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
 }
 
 export interface ApplyActionData {

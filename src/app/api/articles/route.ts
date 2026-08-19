@@ -97,7 +97,7 @@ export async function POST(request: Request) {
     summary: input.summary,
     body: input.body,
     category: input.category,
-    coverImage: input.coverImage,
+    images: input.images,
     authorUid: guard.user.uid,
     authorName: guard.user.profile.displayName,
     twoStage,
