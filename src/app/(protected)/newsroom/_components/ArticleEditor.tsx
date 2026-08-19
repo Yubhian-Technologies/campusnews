@@ -58,11 +58,17 @@ export function ArticleEditor({
   profile,
   article,
   initialCategory,
+  afterSaveHref = "/newsroom",
 }: {
   profile: UserProfile;
   article?: Article;
   /** Pre-fills category for a quick-create entry point (e.g. "Event"). */
   initialCategory?: ArticleCategory;
+  /** Where to navigate after a successful save/submit. Defaults to the
+   *  Newsroom's own article list; the public contribute flow overrides this
+   *  so writers stay inside the mobile app shell instead of being dropped
+   *  into the separate staff Newsroom UI. */
+  afterSaveHref?: string;
 }) {
   const router = useRouter();
   const isAdmin = profile.roleIds.includes("society_admin");
@@ -153,7 +159,7 @@ export function ArticleEditor({
       } else {
         toast.success(article ? "Changes saved." : "Draft created.");
       }
-      router.push("/newsroom");
+      router.push(afterSaveHref);
       router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Save failed.");

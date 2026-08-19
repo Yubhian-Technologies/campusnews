@@ -20,6 +20,7 @@ import {
   submitReelClient,
   uploadReelAsset,
 } from "@/lib/api/reels-upload-client";
+import { compressReelVideo } from "@/lib/api/video-compress-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,7 +32,10 @@ export function ReelUploadForm() {
   const [title, setTitle] = useState("");
   const [video, setVideo] = useState<File | null>(null);
   const [thumb, setThumb] = useState<File | null>(null);
-  const [busy, setBusy] = useState<null | "uploading" | "saving">(null);
+  const [busy, setBusy] = useState<null | "compressing" | "uploading" | "saving">(
+    null,
+  );
+  const [compressProgress, setCompressProgress] = useState(0);
   const [mine, setMine] = useState<ReelRecord[]>([]);
 
   useEffect(() => {
@@ -51,8 +55,14 @@ export function ReelUploadForm() {
       return;
     }
     try {
+      setBusy("compressing");
+      setCompressProgress(0);
+      const compressedVideo = await compressReelVideo(video, {
+        onProgress: setCompressProgress,
+      });
+
       setBusy("uploading");
-      const videoUrl = await uploadReelAsset(video);
+      const videoUrl = await uploadReelAsset(compressedVideo);
       const thumbnail = thumb ? await uploadReelAsset(thumb) : null;
       setBusy("saving");
       const id = await createReelClient({
@@ -112,6 +122,20 @@ export function ReelUploadForm() {
           />
         </div>
 
+        {busy === "compressing" && (
+          <div className="space-y-1.5">
+            <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary transition-[width]"
+                style={{ width: `${Math.round(compressProgress * 100)}%` }}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Compressing video for faster playback…
+            </p>
+          </div>
+        )}
+
         <Button type="submit" disabled={busy !== null}>
           {busy ? (
             <Loader2 className="size-4 animate-spin" />
@@ -120,13 +144,15 @@ export function ReelUploadForm() {
           ) : (
             <UploadCloud className="size-4" />
           )}
-          {busy === "uploading"
-            ? "Uploading…"
-            : busy === "saving"
-              ? "Submitting…"
-              : autoPublish
-                ? "Upload & publish"
-                : "Upload & submit"}
+          {busy === "compressing"
+            ? "Compressing…"
+            : busy === "uploading"
+              ? "Uploading…"
+              : busy === "saving"
+                ? "Submitting…"
+                : autoPublish
+                  ? "Upload & publish"
+                  : "Upload & submit"}
         </Button>
       </form>
 

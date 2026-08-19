@@ -56,7 +56,7 @@ export default async function ContributePage() {
       {/* Options */}
       <div className="grid gap-4 sm:grid-cols-2">
         <OptionCard
-          href="/newsroom/new"
+          href="/news/contribute/article"
           icon={<PenLine className="size-7" />}
           title="Write a blog"
           desc="Draft an article, then submit it for review."
