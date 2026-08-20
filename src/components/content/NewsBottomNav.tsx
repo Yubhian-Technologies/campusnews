@@ -55,7 +55,16 @@ export function NewsBottomNav() {
   ];
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-slate-950">
+    // sticky, not fixed: this nav is already the last child of a flex
+    // min-h-dvh column (see news/layout.tsx), so sticky bottom-0 pins it to
+    // the viewport bottom in the normal case exactly like fixed would — but
+    // unlike fixed, it's positioned within normal layout flow, which avoids
+    // a well-known iOS Safari bug where fixed-bottom elements can render
+    // hidden behind Safari's own bottom toolbar while it's still expanded
+    // (matches the pattern NewsTopBar already uses: sticky top-0, not fixed).
+    // The safe-area-inset-bottom padding class below clears the
+    // home-indicator area on notched iPhones.
+    <nav className="sticky bottom-0 z-30 border-t border-white/10 bg-slate-950 pb-[env(safe-area-inset-bottom)]">
       <div className="mx-auto grid max-w-xl grid-cols-5">
         {tabs.map((tab) => {
           const active = tab.exact
