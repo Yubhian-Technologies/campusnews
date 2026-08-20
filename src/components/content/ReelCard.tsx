@@ -4,13 +4,21 @@ import { Play, Clock } from "lucide-react";
 import type { Reel } from "@/lib/content/reels";
 import { cn } from "@/lib/utils";
 
-/** A vertical reel thumbnail with a play overlay, title, and date. */
+/**
+ * A vertical reel thumbnail with a play overlay, title, and date. Pass
+ * `priority` for whichever card(s) render above the fold on first paint
+ * (e.g. the first item in the home strip / reels grid) — otherwise
+ * next/image lazy-loads it like everything else, which delays the fetch
+ * for something that's actually visible immediately on load.
+ */
 export function ReelCard({
   reel,
   className,
+  priority,
 }: {
   reel: Reel;
   className?: string;
+  priority?: boolean;
 }) {
   return (
     <Link
@@ -25,6 +33,7 @@ export function ReelCard({
         alt=""
         fill
         sizes="(max-width: 640px) 50vw, 220px"
+        priority={priority}
         className="object-cover transition-transform duration-500 group-hover:scale-105"
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-black/30" />

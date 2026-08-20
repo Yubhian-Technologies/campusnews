@@ -7,6 +7,7 @@
  * it to the author.
  */
 import { useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { CheckCircle2, Inbox, Loader2, X, Film } from "lucide-react";
 import type { ReelRecord } from "@/lib/content/reelTypes";
@@ -85,7 +86,12 @@ export function ReelReviewQueue({ initial }: { initial: ReelRecord[] }) {
               <div className="text-xs text-muted-foreground">
                 {scopeLabel(reel)} · by {reel.authorName}
               </div>
-              <p className="font-medium">{reel.title}</p>
+              <Link
+                href={`/newsroom/reel/${reel.id}`}
+                className="block font-medium hover:underline"
+              >
+                {reel.title}
+              </Link>
               <a
                 href={reel.videoUrl}
                 target="_blank"

@@ -1,26 +1,73 @@
 /**
  * /api/reels/[id]
+ *   GET    — fetch one (author or in-scope reviewer only).
+ *   PATCH  — edit content (title/video/thumbnail). Requires content:update +
+ *            canEditReel.
  *   POST { action } — submit / approve / reject / archive (two-stage aware).
  *   DELETE — author may delete own DRAFT; scoped reviewers may delete in-scope.
  * Reuses the article two-stage authorization (reels share the workflow).
  */
 import { NextResponse } from "next/server";
-import { requireApiUser } from "@/lib/auth/api-guard";
+import { requireApiPermission, requireApiUser } from "@/lib/auth/api-guard";
 import {
   applyReelAction,
   deleteReel,
   getReelRecord,
+  updateReel,
 } from "@/lib/firebase/reels";
 import {
   authorAutoPublishes,
   canApproveStage1,
   canApproveStage2,
+  canEditReel,
   canReviewArticle,
 } from "@/lib/content/authorize";
 import { ACTION_TRANSITIONS } from "@/lib/content/types";
-import { reviewActionSchema } from "@/lib/validation/reel";
+import { reviewActionSchema, updateReelSchema } from "@/lib/validation/reel";
 
 type Ctx = { params: Promise<{ id: string }> };
+
+export async function GET(_request: Request, ctx: Ctx) {
+  const { id } = await ctx.params;
+  const guard = await requireApiUser();
+  if (guard instanceof NextResponse) return guard;
+
+  const reel = await getReelRecord(id);
+  if (!reel || reel.societyId !== guard.user.profile.societyId) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
+  const isAuthor = reel.authorUid === guard.user.uid;
+  if (!isAuthor && !canReviewArticle(guard.user.profile, reel)) {
+    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  }
+  return NextResponse.json({ reel });
+}
+
+export async function PATCH(request: Request, ctx: Ctx) {
+  const { id } = await ctx.params;
+  const guard = await requireApiPermission("content:update");
+  if (guard instanceof NextResponse) return guard;
+
+  const reel = await getReelRecord(id);
+  if (!reel || reel.societyId !== guard.user.profile.societyId) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
+  if (!canEditReel(guard.user.profile, reel)) {
+    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  }
+
+  const parsed = updateReelSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Validation failed.", issues: parsed.error.flatten() },
+      { status: 400 },
+    );
+  }
+
+  await updateReel(id, parsed.data);
+  const updated = await getReelRecord(id);
+  return NextResponse.json({ ok: true, reel: updated });
+}
 
 export async function POST(request: Request, ctx: Ctx) {
   const { id } = await ctx.params;

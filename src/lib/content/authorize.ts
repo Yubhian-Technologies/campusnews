@@ -70,6 +70,28 @@ export function canEditArticle(user: UserProfile, article: Article): boolean {
   return canReviewArticle(user, article);
 }
 
+/**
+ * Whether the user may edit a reel's content (title/video/thumbnail). Mirrors
+ * canEditArticle exactly — reels share the same review scope via
+ * canReviewArticle, which is structurally compatible with ReelRecord's
+ * societyId/locationId/collegeId fields.
+ */
+export function canEditReel(
+  user: UserProfile,
+  reel: Pick<
+    Article,
+    "societyId" | "locationId" | "collegeId"
+  > & { authorUid: string; status: Article["status"] },
+): boolean {
+  if (user.status !== "ACTIVE" || !sameSociety(user, reel)) return false;
+
+  const isAuthor = reel.authorUid === user.uid;
+  if (isAuthor && (reel.status === "DRAFT" || reel.status === "REJECTED")) {
+    return true;
+  }
+  return canReviewArticle(user, reel);
+}
+
 export interface ArticleQueryScope {
   /** society_admin sees the whole society; others are location-restricted. */
   societyId: string;

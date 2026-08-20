@@ -24,5 +24,20 @@ export const createReelSchema = z.object({
 
 export type CreateReelInput = z.infer<typeof createReelSchema>;
 
+/** Edit payload — every field optional so a caller may patch just one. */
+export const updateReelSchema = z.object({
+  title: z.string().trim().min(4, "Title must be at least 4 characters.").max(160).optional(),
+  videoUrl: z.string().trim().url("A video upload is required.").optional(),
+  thumbnail: z
+    .string()
+    .trim()
+    .url()
+    .nullish()
+    .transform((v) => (v ? v : null))
+    .optional(),
+});
+
+export type UpdateReelInput = z.infer<typeof updateReelSchema>;
+
 // Review actions reuse the article schema (submit/approve/reject/archive).
 export { reviewActionSchema } from "./article";

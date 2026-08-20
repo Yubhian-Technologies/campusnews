@@ -69,8 +69,13 @@ export default async function NewsHomePage() {
           </Link>
         </div>
         <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {reels.map((reel) => (
-            <ReelCard key={reel.id} reel={reel} className="w-32 shrink-0" />
+          {reels.map((reel, i) => (
+            <ReelCard
+              key={reel.id}
+              reel={reel}
+              className="w-32 shrink-0"
+              priority={i === 0}
+            />
           ))}
         </div>
       </section>

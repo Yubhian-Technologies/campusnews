@@ -55,8 +55,8 @@ export function ReelsBrowser({ reels }: { reels: Reel[] }) {
 
       {tab === "all" && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {reels.map((reel) => (
-            <ReelCard key={reel.id} reel={reel} />
+          {reels.map((reel, i) => (
+            <ReelCard key={reel.id} reel={reel} priority={i < 3} />
           ))}
         </div>
       )}

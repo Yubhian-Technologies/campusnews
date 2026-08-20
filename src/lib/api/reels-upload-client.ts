@@ -6,7 +6,7 @@
  */
 import { uploadUserAsset } from "@/lib/firebase/upload-client";
 import type { ReelRecord } from "@/lib/content/reelTypes";
-import type { CreateReelInput } from "@/lib/validation/reel";
+import type { CreateReelInput, UpdateReelInput } from "@/lib/validation/reel";
 
 /** Upload a file to reel-uploads/{uid}/… and return its download URL. */
 export async function uploadReelAsset(file: File): Promise<string> {
@@ -26,6 +26,25 @@ export async function createReelClient(input: CreateReelInput): Promise<string> 
   });
   if (!res.ok) throw new Error(await parseError(res));
   return ((await res.json()) as { id: string }).id;
+}
+
+export async function getReelClient(id: string): Promise<ReelRecord> {
+  const res = await fetch(`/api/reels/${id}`, { cache: "no-store" });
+  if (!res.ok) throw new Error(await parseError(res));
+  return ((await res.json()) as { reel: ReelRecord }).reel;
+}
+
+export async function updateReelClient(
+  id: string,
+  input: UpdateReelInput,
+): Promise<ReelRecord> {
+  const res = await fetch(`/api/reels/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error(await parseError(res));
+  return ((await res.json()) as { reel: ReelRecord }).reel;
 }
 
 export async function submitReelClient(id: string): Promise<void> {

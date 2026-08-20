@@ -18,7 +18,7 @@ import {
   type Article,
   type ArticleCategory,
 } from "@/lib/content/types";
-import { authorAutoPublishes } from "@/lib/content/authorize";
+import { authorAutoPublishes, canEditArticle } from "@/lib/content/authorize";
 import {
   createArticleSchema,
   MAX_ARTICLE_IMAGES,
@@ -75,9 +75,12 @@ export function ArticleEditor({
   const router = useRouter();
   const isAdmin = profile.roleIds.includes("society_admin");
   const autoPublish = authorAutoPublishes(profile);
-  const editable = article
-    ? article.status === "DRAFT" || article.status === "REJECTED" || isAdmin
-    : true;
+  // canEditArticle already covers this correctly (author on DRAFT/REJECTED,
+  // or any in-scope reviewer at any status) — this used to be a narrower
+  // hand-rolled check that only special-cased society_admin, so a College
+  // Admin or Location Admin reviewing a student's SUBMITTED article got a
+  // read-only form despite being authorized server-side to edit it.
+  const editable = article ? canEditArticle(profile, article) : true;
   // "Submit"/"Publish" is only a valid transition from DRAFT/REJECTED (or a
   // brand-new article) — matches ACTION_TRANSITIONS.submit.from server-side.
   // An admin editing an already-submitted/published article is still

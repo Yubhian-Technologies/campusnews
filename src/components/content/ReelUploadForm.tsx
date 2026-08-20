@@ -8,6 +8,7 @@
  * own reels with their current status.
  */
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Loader2, UploadCloud, Film, Rocket } from "lucide-react";
 import type { ReelRecord } from "@/lib/content/reelTypes";
@@ -168,14 +169,16 @@ export function ReelUploadForm() {
         ) : (
           <ul className="divide-y rounded-2xl border bg-card">
             {mine.map((r) => (
-              <li
-                key={r.id}
-                className="flex items-center justify-between gap-3 px-4 py-3"
-              >
-                <span className="min-w-0 truncate font-medium">{r.title}</span>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {STATUS_LABELS[r.status]}
-                </span>
+              <li key={r.id}>
+                <Link
+                  href={`/newsroom/reel/${r.id}`}
+                  className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-accent"
+                >
+                  <span className="min-w-0 truncate font-medium">{r.title}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {STATUS_LABELS[r.status]}
+                  </span>
+                </Link>
               </li>
             ))}
           </ul>

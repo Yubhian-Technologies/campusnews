@@ -77,6 +77,20 @@ export async function getReelRecord(id: string): Promise<ReelRecord | null> {
   return snap.exists ? mapReel(snap.id, snap.data()!) : null;
 }
 
+export interface UpdateReelData {
+  title?: string;
+  videoUrl?: string;
+  thumbnail?: string | null;
+}
+
+/** Patch a reel's content (title/video/thumbnail) — status is untouched. */
+export async function updateReel(id: string, patch: UpdateReelData): Promise<void> {
+  await adminDb()
+    .collection(REELS)
+    .doc(id)
+    .update({ ...patch, updatedAt: FieldValue.serverTimestamp() });
+}
+
 export interface ApplyReelActionData {
   status: ArticleStatus;
   reviewerUid?: string;
